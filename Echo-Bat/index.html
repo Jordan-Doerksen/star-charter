@@ -146,6 +146,17 @@ body {
 .card .c-tier { font-size: 0.54rem; letter-spacing: 0.24em; text-transform: uppercase; color: var(--violet); }
 .card .c-name { font-weight: 800; font-size: 1.02rem; margin: 3px 0 5px; }
 .card .c-desc { font-size: 0.8rem; line-height: 1.5; color: var(--muted); }
+.card.sel { border-color: var(--violet); background: rgba(179, 157, 245, 0.1); }
+.card .c-confirm {
+  display: none;
+  margin-top: 8px;
+  font-size: 0.56rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--violet);
+  font-weight: 700;
+}
+.card.sel .c-confirm { display: block; }
 
 /* ----- Stats ----- */
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 4px; }
@@ -314,10 +325,11 @@ const Audio = {
     this.noiseBuf = c.createBuffer(1, len, c.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.startMusic();
   },
   resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
   suspend() { if (this.ctx && this.ctx.state === 'running') this.ctx.suspend(); },
-  tone(freq, dur, vol, type = 'sine', slideTo = null) {
+  tone(freq, dur, vol, type = 'sine', slideTo = null, toEcho = false) {
     if (!this.ctx) return;
     const c = this.ctx, t = c.currentTime;
     const o = c.createOscillator(), g = c.createGain();
@@ -325,8 +337,53 @@ const Audio = {
     if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g); g.connect(this.master);
+    o.connect(g); g.connect(toEcho && this.echoIn ? this.echoIn : this.master);
     o.start(t); o.stop(t + dur + 0.05);
+  },
+  // ----- ambient cave music: a feedback-delay echo chamber, slow bell
+  // tones in a low pentatonic, and the occasional water drip. No files.
+  startMusic() {
+    if (this.echoIn || !this.ctx) return;
+    const c = this.ctx;
+    this.echoIn = c.createGain();
+    const d = c.createDelay(2); d.delayTime.value = 0.58;
+    const fb = c.createGain(); fb.gain.value = 0.42;
+    const damp = c.createBiquadFilter(); damp.type = 'lowpass'; damp.frequency.value = 1400;
+    this.echoIn.connect(d); d.connect(damp); damp.connect(fb); fb.connect(d);
+    const wet = c.createGain(); wet.gain.value = 0.5;
+    d.connect(wet); wet.connect(this.master);
+    this.echoIn.connect(this.master);
+    const NOTES = [110, 130.8, 146.8, 164.8, 196, 220, 261.6]; // A minor pentatonic, down low
+    const note = () => {
+      if (c.state === 'running' && !save.muted) {
+        const f = NOTES[Math.floor(Math.random() * NOTES.length)] * (Math.random() < 0.22 ? 2 : 1);
+        const t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.05, t + 0.6);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
+        o.connect(g); g.connect(this.echoIn);
+        o.start(t); o.stop(t + 3.6);
+      }
+      setTimeout(note, 2800 + Math.random() * 4500);
+    };
+    note();
+    const drip = () => {
+      if (c.state === 'running' && !save.muted) {
+        const t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(2600 + Math.random() * 900, t);
+        o.frequency.exponentialRampToValueAtTime(700, t + 0.09);
+        g.gain.setValueAtTime(0.055, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+        o.connect(g); g.connect(this.echoIn);
+        o.start(t); o.stop(t + 0.16);
+      }
+      setTimeout(drip, 4000 + Math.random() * 9000);
+    };
+    drip();
   },
   noise(dur, vol, freq = 800, type = 'lowpass') {
     if (!this.ctx) return;
@@ -339,8 +396,8 @@ const Audio = {
     src.connect(f); f.connect(g); g.connect(this.master);
     src.start(t); src.stop(t + dur);
   },
-  chirp() { this.tone(1750, 0.16, 0.05, 'sine', 880); },
-  fruit() { this.tone(620, 0.18, 0.12, 'sine'); this.tone(930, 0.3, 0.08, 'sine'); },
+  chirp() { this.tone(1750, 0.16, 0.05, 'sine', 880, true); },
+  fruit() { this.tone(620, 0.18, 0.12, 'sine', null, true); this.tone(930, 0.3, 0.08, 'sine', null, true); },
   hit() { this.tone(140, 0.35, 0.3, 'sawtooth', 60); this.noise(0.3, 0.22, 500); },
   death() { this.tone(220, 1.0, 0.26, 'sawtooth', 40); this.noise(0.8, 0.2, 300); },
   level() { [520, 660, 780].forEach((f, i) => setTimeout(() => this.tone(f, 0.5, 0.1), i * 120)); },
@@ -448,6 +505,24 @@ function genLevel(L, keepProgress) {
   grace = 1.6;
 }
 
+// the orchard: four fruits, each with its own habit
+const FRUIT_KINDS = {
+  berry: { pts: 10, hue: [255, 176, 94] },   // glowberry — the staple
+  plum:  { pts: 15, hue: [196, 154, 255] },  // echo plum — sings a free pulse when eaten
+  moth:  { pts: 30, hue: [255, 228, 150] },  // lantern moth — flutters, and it's shy
+  heart: { pts: 5,  hue: [255, 122, 140] },  // heartfruit — mends a heart, grows where there's hurt
+};
+function makeFruit(x, y) {
+  let kind = 'berry';
+  const roll = Math.random();
+  if (bat.hp < maxHp() && !fruits.some((f) => f.kind === 'heart') && roll < 0.16) kind = 'heart';
+  else if (roll < 0.34) kind = 'plum';
+  else if (roll < 0.48) kind = 'moth';
+  const f = { x, y, r: (kind === 'moth' ? 7.5 : 9) * S, bob: rand(0, TAU), kind };
+  if (kind === 'moth') { f.dir = rand(0, TAU); f.flap = rand(0, TAU); }
+  return f;
+}
+
 function spawnFruit() {
   for (let t = 0; t < 50; t++) {
     const x = rand(W * 0.08, W * 0.92), y = rand(H * 0.16, H * 0.86);
@@ -460,10 +535,10 @@ function spawnFruit() {
     if (bad) continue;
     for (const f of fruits) if (dist(x, y, f.x, f.y) < 90 * S) { bad = true; break; }
     if (bad) continue;
-    fruits.push({ x, y, r: 9 * S, bob: rand(0, TAU) });
+    fruits.push(makeFruit(x, y));
     return;
   }
-  fruits.push({ x: W / 2, y: H * 0.25, r: 9 * S, bob: 0 }); // last resort
+  fruits.push(makeFruit(W / 2, H * 0.25)); // last resort
 }
 
 // ==========================================================================
@@ -522,9 +597,12 @@ function collectFruit(i) {
   const f = fruits[i];
   fruits.splice(i, 1);
   got++; fruitTotal++;
-  score += 10;
-  popup(f.x, f.y, '+10');
-  sparks(f.x, f.y, [255, 176, 94], 10, 0.9);
+  const K = FRUIT_KINDS[f.kind] || FRUIT_KINDS.berry;
+  score += K.pts;
+  popup(f.x, f.y, f.kind === 'heart' ? '♥' : `+${K.pts}`);
+  sparks(f.x, f.y, K.hue, 10, 0.9);
+  if (f.kind === 'heart') { bat.hp = Math.min(bat.hp + 1, maxHp()); }
+  if (f.kind === 'plum') { pulses.push({ x: f.x, y: f.y, r: 6 * S }); Audio.chirp(); } // the plum sings
   Audio.fruit();
   buzz(12);
   if (got >= quota) { levelComplete(); }
@@ -553,8 +631,28 @@ function advance() {
 }
 
 let offered = [];
+let giftSel = -1, giftOpenAt = 0;
+function renderGiftCards() {
+  $('upCards').innerHTML = offered.map((k, i) => {
+    const sel = giftSel === i ? ' sel' : '';
+    const confirm = '<div class="c-confirm">✦ tap again to take</div>';
+    if (k === 'snack') {
+      return `<button class="card${sel}" data-i="${i}">
+        <div class="c-tier">Forage</div>
+        <div class="c-name">Moth Snack</div>
+        <div class="c-desc">+50 harvest, and one heart healed. Crunchy.</div>${confirm}</button>`;
+    }
+    const u = UPGRADES[k];
+    return `<button class="card${sel}" data-i="${i}">
+      <div class="c-tier">${u.label} ✦ Tier ${ROMAN[upg[k] + 1]}</div>
+      <div class="c-name">${u.name}</div>
+      <div class="c-desc">${u.desc}</div>${confirm}</button>`;
+  }).join('');
+}
 function openGift() {
   state = 'choosing';
+  giftSel = -1;
+  giftOpenAt = time;
   const pool = Object.keys(UPGRADES).filter((k) => upg[k] < UPGRADES[k].max);
   offered = [];
   while (offered.length < 3 && pool.length) {
@@ -562,19 +660,7 @@ function openGift() {
   }
   while (offered.length < 3) offered.push('snack');
   $('upEyebrow').textContent = `A gift ✦ Cavern ${String(level).padStart(2, '0')} cleared`;
-  $('upCards').innerHTML = offered.map((k, i) => {
-    if (k === 'snack') {
-      return `<button class="card" data-i="${i}">
-        <div class="c-tier">Forage</div>
-        <div class="c-name">Moth Snack</div>
-        <div class="c-desc">+50 harvest, and one heart healed. Crunchy.</div></button>`;
-    }
-    const u = UPGRADES[k];
-    return `<button class="card" data-i="${i}">
-      <div class="c-tier">${u.label} ✦ Tier ${ROMAN[upg[k] + 1]}</div>
-      <div class="c-name">${u.name}</div>
-      <div class="c-desc">${u.desc}</div></button>`;
-  }).join('');
+  renderGiftCards();
   showScreen('up');
 }
 
@@ -582,6 +668,15 @@ function chooseGift(i) {
   if (state !== 'choosing') return;
   const k = offered[i];
   if (!k) return;
+  if (time - giftOpenAt < 0.35) return; // swallow the tap that was still flying the bat
+  if (giftSel !== i) {
+    // first tap selects; a second tap on the same card takes it
+    giftSel = i;
+    renderGiftCards();
+    Audio.chirp();
+    buzz(8);
+    return;
+  }
   if (k === 'snack') {
     score += 50;
     bat.hp = Math.min(bat.hp + 1, maxHp());
@@ -835,6 +930,17 @@ function update(dt) {
   for (let i = fruits.length - 1; i >= 0; i--) {
     const f = fruits[i];
     f.bob += dt * 2.2;
+    if (f.kind === 'moth') {
+      // the lantern moth wanders, and shies away from open mouths
+      f.flap += dt * 14;
+      f.dir += rand(-1.4, 1.4) * dt;
+      const md = dist(f.x, f.y, bat.x, bat.y);
+      if (md < 90 * S) f.dir = angLerp(f.dir, Math.atan2(f.y - bat.y, f.x - bat.x), 0.06);
+      f.x += Math.cos(f.dir) * 42 * S * dt;
+      f.y += Math.sin(f.dir) * 42 * S * dt;
+      f.x = clamp(f.x, 30, W - 30);
+      f.y = clamp(f.y, 70, H - 30);
+    }
     const d = dist(f.x, f.y, bat.x, bat.y);
     const nrr = nectarR();
     if (d < nrr && d > 1) {
@@ -966,24 +1072,61 @@ function drawOwls() {
 
 function drawFruit() {
   for (const f of fruits) {
-    const by = f.y + Math.sin(f.bob) * 3 * S;
+    const K = FRUIT_KINDS[f.kind] || FRUIT_KINDS.berry;
+    const by = f.y + (f.kind === 'moth' ? 0 : Math.sin(f.bob) * 3 * S);
     const p = REDUCED ? 0.5 : 0.5 + 0.5 * Math.sin(f.bob * 1.4);
     const g = ctx.createRadialGradient(f.x, by, 0, f.x, by, f.r * 3.4);
-    g.addColorStop(0, `rgba(255, 176, 94, ${0.4 + p * 0.2})`);
+    g.addColorStop(0, `rgba(${K.hue[0]},${K.hue[1]},${K.hue[2]},${0.36 + p * 0.2})`);
     g.addColorStop(1, 'transparent');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(f.x, by, f.r * 3.4, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#ffb05e';
-    ctx.beginPath(); ctx.arc(f.x, by, f.r * 0.85, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(255, 235, 200, 0.9)';
-    ctx.beginPath(); ctx.arc(f.x - f.r * 0.25, by - f.r * 0.3, f.r * 0.26, 0, TAU); ctx.fill();
-    // a little leaf
-    ctx.strokeStyle = 'rgba(140, 220, 150, 0.8)';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(f.x, by - f.r * 0.8);
-    ctx.quadraticCurveTo(f.x + 4 * S, by - f.r * 1.6, f.x + 7 * S, by - f.r * 1.3);
-    ctx.stroke();
+    const body = `rgb(${K.hue[0]},${K.hue[1]},${K.hue[2]})`;
+    if (f.kind === 'moth') {
+      // a pale lantern moth, wings quick and bright
+      const wf = Math.sin(f.flap) * 0.8;
+      ctx.save();
+      ctx.translate(f.x, by);
+      ctx.rotate(f.dir + Math.PI / 2);
+      ctx.fillStyle = body;
+      for (const sgn of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(sgn * f.r * 0.7, 0, f.r * 0.7, f.r * (0.32 + Math.abs(wf) * 0.3), sgn * wf * 0.5, 0, TAU);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255, 255, 240, 0.95)';
+      ctx.beginPath(); ctx.ellipse(0, 0, f.r * 0.22, f.r * 0.55, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    } else if (f.kind === 'heart') {
+      // heartfruit — two lobes and a point, beating slow
+      const hr = f.r * (0.82 + p * 0.12);
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.moveTo(f.x, by + hr);
+      ctx.bezierCurveTo(f.x - hr * 1.5, by - hr * 0.3, f.x - hr * 0.55, by - hr * 1.15, f.x, by - hr * 0.45);
+      ctx.bezierCurveTo(f.x + hr * 0.55, by - hr * 1.15, f.x + hr * 1.5, by - hr * 0.3, f.x, by + hr);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = body;
+      ctx.beginPath(); ctx.arc(f.x, by, f.r * 0.85, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255, 240, 220, 0.9)';
+      ctx.beginPath(); ctx.arc(f.x - f.r * 0.25, by - f.r * 0.3, f.r * 0.26, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(140, 220, 150, 0.8)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(f.x, by - f.r * 0.8);
+      ctx.quadraticCurveTo(f.x + 4 * S, by - f.r * 1.6, f.x + 7 * S, by - f.r * 1.3);
+      ctx.stroke();
+      if (f.kind === 'plum') {
+        // a second leaf, and a faint ring — it hums with held song
+        ctx.beginPath();
+        ctx.moveTo(f.x, by - f.r * 0.8);
+        ctx.quadraticCurveTo(f.x - 4 * S, by - f.r * 1.6, f.x - 7 * S, by - f.r * 1.3);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(196, 154, 255, ${0.22 + p * 0.2})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(f.x, by, f.r * (1.6 + p * 0.5), 0, TAU); ctx.stroke();
+      }
+    }
   }
 }
 
@@ -1177,6 +1320,7 @@ addEventListener('keydown', (e) => {
   }
   else if (e.code === 'Enter' || e.code === 'Space') {
     if (state === 'title' || state === 'over') { firstGesture(); startGame(); }
+    else if (state === 'choosing' && giftSel >= 0) chooseGift(giftSel); // Enter confirms
   }
 });
 addEventListener('keyup', (e) => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = 0; });
