@@ -1,15 +1,16 @@
-# Star Charter ✦
+# Echo Bat ✦ Night Harvest
 
-A constellation-charting roguelite in a single HTML file. Pilot a survey probe
-with heavy, drifty momentum — hold to thrust toward your pointer (or finger),
-release to coast. Trace each constellation's blueprint on the atlas plate,
-and refit your instruments with one of three upgrades every third plate.
+*A fork of [Star Charter](https://github.com/Jordan-Doerksen/star-charter) — same bones, different beast.*
 
-The sky disagrees: asteroids, comets, gravity-well black holes ringing with
-gravitational waves, drifting space-fauna (grubs, void squid, glass beetles),
-and — later — aliens that shoot back.
+You are a small bat in a deep cave. The fruit glows; the stone does not.
+Your sonar sings on its own, painting the cave in fading echoes — fly by
+what it shows you, and trust nothing between pulses.
 
-**Play:** https://jordan-doerksen.github.io/star-charter/
+- **Drag** — the bat flies above your finger (mobile-first; mouse + WASD work too)
+- **Sonar** — auto-pulses reveal pillars and drifting spores, then the dark takes them back
+- **Fruit** — always visible. Fill the quota to descend to the next cavern
+- **Every third cavern** — choose a gift: longer cries, quicker chirps, lingering
+  echoes, wide-band nightsight, spare hearts, down feathers, swift wings, nectar sense
+- From cavern 4: owls. Two amber eyes are your only warning.
 
-Desktop-first, mobile-friendly. No build, no dependencies — `index.html` is
-the whole game. Part of the Glass Archive.
+One HTML file, no dependencies. Open `index.html` on any phone or browser.
