@@ -196,4 +196,52 @@ probe-select screen at run start.
    - Tune caps / minPlate gating; verify nothing breaks at max stacks.
 2. **Phase 2 — Presentation** *(second)*
    - Attract-mode title.
-   - Rich records + PR tracking
+   - Rich records + PR tracking; sector names + milestone cards.
+3. **Phase 3 — Probes** — Surveyor vs Skimmer + select screen.
+4. **Phase 4 — Hazards** — pulsar + asteroid belt.
+
+Each phase is independently shippable and testable. After every phase: playtest, confirm 60fps,
+confirm no crash at max upgrade stacks.
+
+---
+
+## 11. Parked (post-v1, not now)
+
+Click-drift alt control mode · push-your-luck "lock-in" plates · destructible asteroids · boss
+plates · more probes/weapons · between-run meta-progression · audio expansion · touch/mobile
+adaptation layer (offset follow-target above the finger, second-finger Focus, larger hit targets
+— touch drag already half-works, so this is an additive layer, not a separate build).
+
+---
+
+## 12. Open / to-confirm
+
+- Exact tuning numbers (thrust, drag, focus multiplier, spawn ramps) — dial in during Phase 1
+  playtests, not on paper.
+- Naming of the two new weapons (Halo Drones / Scatter Flare are placeholders).
+- ~~Whether Focus binds to Shift, right-mouse, or both.~~ **Resolved: both** (it was free).
+
+---
+
+## 13. Implementation log — v1 Pro shipped
+
+All four phases implemented in `Star-Charter-Pro/index.html` (single file, no dependencies).
+Deltas from the doc above, beyond the inline corrections already noted:
+
+- **Controls**: direct-follow with an 80px arrive dead-zone, hard speed cap, Focus = Shift
+  *or* right-mouse (cap ×0.45-ish via probe stat, +drag, hitbox ×0.85, crosshair reticle).
+  Pointer leaving the window coasts. Keyboard steering retained as fallback.
+- **Motes** added per §5 note. Beam/Halo/Flare kills drop them; Coil farms them.
+- **Pulsar**: spawns plate 13+ (cap 1; 2 from plate 24), 1.5s dashed-line telegraph, then a
+  sweeping bipolar beam for 5.5s. **Belt**: plate 8+, telegraphed band + teal safe-lane wash,
+  ~8s stream, one gap lane.
+- **Probes**: Surveyor (2 shields, heavy, wide lens + innate 60px coil) vs Skimmer (1 shield,
+  fast, small hull, Focus grants 0.3s phase, 2.5s cooldown). Select screen between title and
+  run; last choice persisted.
+- **Records**: score, deepest plate/sector, time, longest clean streak, stars, motes, aliens
+  downed, loadout line; per-stat ✦PR markers. Save key renamed `starCharterProSave` (schema
+  grew; the classic prototype's save is untouched).
+- **Attract mode**: ghost pilot seeks motes / flees rocks behind the title glass; resets on
+  return to title.
+- Stat tweaks while wiring: star score 10+4/Eye tier; plate bonus ×(1+0.25·Eye); milestone
+  reward = shield-else-150; Stardust Cache now also restores one shield layer (per §5 filler row).

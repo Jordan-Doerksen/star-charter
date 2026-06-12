@@ -499,6 +499,20 @@ body {
 }
 #buildLine b { color: var(--gold); font-weight: 400; }
 
+/* ----- archive nav — sibling games ----- */
+.archive-nav { display: flex; justify-content: center; gap: 20px; margin-top: 12px; }
+.archive-nav a {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  text-decoration: none;
+  padding: 6px 2px;
+  transition: color var(--t-fast);
+}
+.archive-nav a:hover { color: var(--gold); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
@@ -549,6 +563,10 @@ body {
     <button id="btnStart" class="btn">Begin charting</button>
     <p class="record-line" id="recordLine" hidden>Personal record <b id="recordVal">0</b></p>
     <p class="colophon">N°02 ✦ The Glass Archive ✦ MMXXVI</p>
+    <nav class="archive-nav" aria-label="other games in the archive">
+      <a href="../">N°01 ✦ Star Charter</a>
+      <a href="../Echo-Bat/">N°03 ✦ Echo Bat</a>
+    </nav>
   </section>
 
   <section id="screenProbe" class="glass-panel screen wide" hidden aria-label="probe select">
